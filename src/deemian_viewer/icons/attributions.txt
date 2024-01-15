@@ -1,0 +1,2 @@
+next.png, play.png, back.png, pause.png
+https://www.flaticon.com/authors/nawicon

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Deemian Viewer</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+  </style>
+  <script src="js/ngl.js"></script>
+  <script>
+    var backend = null;
+    document.addEventListener("DOMContentLoaded", function () {
+        stage = new NGL.Stage('viewport')
+        // Handle window resizing
+        window.addEventListener( "resize", function( event ){
+            stage.handleResize();
+        }, false );
+
+        function addElement (el) {
+          Object.assign(el.style, {
+            fontFamily: "Console, Lucida, monospace",
+            fontSize: "12px",
+            position: "absolute",
+            zIndex: 10
+          })
+          stage.viewer.container.appendChild(el)
+        }
+
+        function createElement (name, properties, style) {
+          var el = document.createElement(name)
+          Object.assign(el, properties)
+          Object.assign(el.style, style)
+          return el
+        }
+
+        var topPosition = 500
+
+        function getTopPosition (increment) {
+          if (increment) topPosition += increment
+          return topPosition + "px"
+        }
+
+        addElement(createElement("span", {
+          innerText: "fog far"
+        }, { top: getTopPosition(40), left: "18px", color: "white" }))
+
+        var fogFarRange = createElement("input", {
+          type: "range", value: 70, min: 51, max: 90, step: 1
+        }, { top: getTopPosition(20), left: "12px", opacity: 0.6 })
+
+        fogFarRange.oninput = function (e) {
+          stage.setParameters({ fogFar: e.target.value})
+        }
+        addElement(fogFarRange)
+
+        var tooltip = document.createElement('div')
+        Object.assign(tooltip.style, {
+          display: 'none',
+          position: 'fixed',
+          zIndex: 10,
+          pointerEvents: 'none',
+          backgroundColor: 'rgba( 0, 0, 0, 0.6 )',
+          color: 'lightgrey',
+          padding: '8px',
+          fontFamily: 'Console, Lucida, monospace',
+          fontSize: '13px'
+        })
+        document.body.appendChild(tooltip)
+
+        // remove default hoverPick mouse action
+        stage.mouseControls.remove('hoverPick')
+
+        // listen to `hovered` signal to move tooltip around and change its text
+        stage.signals.hovered.add(function (pickingProxy) {
+          if (pickingProxy) {
+            if (pickingProxy.atom || pickingProxy.bond) {
+              var atom = pickingProxy.atom || pickingProxy.closestBondAtom
+              tooltip.innerHTML = `${pickingProxy.getLabel()}`
+            } else {
+              tooltip.innerHTML = `${pickingProxy.getLabel()}`
+            }
+            var mp = pickingProxy.mouse.position
+            tooltip.style.bottom = window.innerHeight - mp.y + 3 + 'px'
+            tooltip.style.left = mp.x + 3 + 'px'
+            tooltip.style.display = 'block'
+          } else {
+            tooltip.style.display = 'none'
+          }
+        })
+    });
+  </script>
+</head>
+<body>
+  <div id="viewport" style="width:100%; height:100%; margin: 0 auto;"></div>
+</body>
+</html>
