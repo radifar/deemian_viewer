@@ -76,33 +76,42 @@ class MoleculeView(QWebEngineView):
             parent_name = item_parent.text(0).replace(":","_")
         else:
             parent_name = ''
+
+        # helper class to use variable as match-case pattern
+        # https://stackoverflow.com/questions/66159432/how-to-use-values-stored-in-variables-as-case-patterns
+        class Parent():
+            NAME = parent_name
         
         if item.checkState(column) == QtCore.Qt.Checked:
             if name == "electrostatic as cation":
                 self.runJS(f'as_cat_{parent_name}.setVisibility(true)')
                 for unit in self.vis_res_chain_list:
                     match unit:
-                        case [_, _, name, "electrostatic_cation"]:
-                            self.runJS(f"stage.getRepresentationsByName('{''.join(unit)}').setVisibility(true)")
+                        case [_, _, Parent.NAME, "electrostatic_cation"]:
+                            res_chain, parent, name, int_type = unit
+                            self.runJS(f"stage.getRepresentationsByName('{res_chain+parent+name+int_type}').setVisibility(true)")
             elif name == "electrostatic as anion":
                 self.runJS(f'as_an_{parent_name}.setVisibility(true)')
                 for unit in self.vis_res_chain_list:
                     match unit:
-                        case [_, _, name, "electrostatic_anion"]:
-                            self.runJS(f"stage.getRepresentationsByName('{''.join(unit)}').setVisibility(true)")
+                        case [_, _, Parent.NAME, "electrostatic_anion"]:
+                            res_chain, parent, name, int_type = unit
+                            self.runJS(f"stage.getRepresentationsByName('{res_chain+parent+name+int_type}').setVisibility(true)")
         elif item.checkState(column) == QtCore.Qt.Unchecked:
             if name == "electrostatic as cation":
                 self.runJS(f'as_cat_{parent_name}.setVisibility(false)')
                 for unit in self.vis_res_chain_list:
                     match unit:
-                        case [_, _, name, "electrostatic_cation"]:
-                            self.runJS(f"stage.getRepresentationsByName('{''.join(unit)}').setVisibility(false)")
+                        case [_, _, Parent.NAME, "electrostatic_cation"]:
+                            res_chain, parent, name, int_type = unit
+                            self.runJS(f"stage.getRepresentationsByName('{res_chain+parent+name+int_type}').setVisibility(false)")
             elif name == "electrostatic as anion":
                 self.runJS(f'as_an_{parent_name}.setVisibility(false)')
                 for unit in self.vis_res_chain_list:
                     match unit:
-                        case [_, _, name, "electrostatic_anion"]:
-                            self.runJS(f"stage.getRepresentationsByName('{''.join(unit)}').setVisibility(false)")
+                        case [_, _, Parent.NAME, "electrostatic_anion"]:
+                            res_chain, parent, name, int_type = unit
+                            self.runJS(f"stage.getRepresentationsByName('{res_chain+parent+name+int_type}').setVisibility(false)")
     
     @QtCore.Slot()
     def handle_selection_changed(self, item: QtWidgets.QTreeWidgetItem, column):
@@ -126,8 +135,7 @@ class MoleculeView(QWebEngineView):
         self.tree_pair.clear()
         for int_subject in self.int_subjects:
             name = int_subject["name"]
-            pair_item = QtWidgets.QTreeWidgetItem(self.tree_pair)
-            pair_item.setText(0, name)
+            pair_item = QtWidgets.QTreeWidgetItem(self.tree_pair, [name])
             pair_item.setFlags(pair_item.flags() | QtCore.Qt.ItemFlag.ItemIsAutoTristate | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
             interaction1 = QtWidgets.QTreeWidgetItem(pair_item, ["electrostatic as cation"])
             interaction2 = QtWidgets.QTreeWidgetItem(pair_item, ["electrostatic as anion"])
