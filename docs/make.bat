@@ -9,7 +9,7 @@ if "%SPHINXBUILD%" == "" (
 )
 set SOURCEDIR=.
 set BUILDDIR=_build
-set SPHINXPROJ=deemian_viewer
+set SPHINXPROJ=deemian
 
 if "%1" == "" goto help
 

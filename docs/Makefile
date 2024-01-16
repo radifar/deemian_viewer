@@ -3,7 +3,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = python -msphinx
-SPHINXPROJ    = deemian_viewer
+SPHINXPROJ    = deemian
 SOURCEDIR     = .
 BUILDDIR      = _build
 
