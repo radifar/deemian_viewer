@@ -123,7 +123,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.app = app
         self.deemian_data = {}
         self.deemian_loaded = False
-        self.reactmodels = {}
         self.isPlaying = False
         self.dirname = os.path.dirname(os.path.realpath(__file__))
 
