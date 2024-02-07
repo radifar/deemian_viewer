@@ -1,3 +1,4 @@
+import json
 import os
 
 from PySide6 import QtCore, QtWidgets
@@ -36,7 +37,7 @@ class MoleculeView(QWebEngineView):
 
     def __init__(self):
         super().__init__()
-        self.resize(780, 350)
+        # self.resize(780, 350)
 
         self.deemian_data = {}
         self.molselection = {}
@@ -47,7 +48,7 @@ class MoleculeView(QWebEngineView):
         htmlpath = dirname + "/index.html"
         with open(htmlpath, 'r') as f:
             localurl = QtCore.QUrl.fromLocalFile(dirname)
-            html = f.read().replace('js/ngl.js', localurl.toString() + '/js/ngl.js')
+            html = f.read().replace('js/', localurl.toString() + '/js/').replace('fonts/', localurl.toString() + '/fonts/')
             self.setHtml(html, localurl)
         
         self.runJS = self.page().runJavaScript
@@ -69,20 +70,25 @@ class MoleculeView(QWebEngineView):
                         })''')
 
     @QtCore.Slot()
-    def handle_pair_changed(self, item: QtWidgets.QTreeWidgetItem, column):
-        name = item.text(0)
-        item_parent = item.parent()
-        if item_parent:
-            parent_name = item_parent.text(0).replace(":","_")
+    def handle_tree_pair(self, value):
+        name = value["name"]
+        parent_name_original = value["parent"]
+        parent_name = parent_name_original.replace(":","_")
+        pair_index = [pair["name"] for pair in self.tree_pair_data].index(parent_name_original)
+
+        if name == "all":
+            for check_index, _ in enumerate(self.tree_pair_data[pair_index]["state"]):
+                self.tree_pair_data[pair_index]["state"][check_index] = value["checked"]
         else:
-            parent_name = ''
+            check_index = self.tree_pair_data[0]["interactions"].index(name)
+            self.tree_pair_data[pair_index]["state"][check_index] = value["checked"]
 
         # helper class to use variable as match-case pattern
         # https://stackoverflow.com/questions/66159432/how-to-use-values-stored-in-variables-as-case-patterns
         class Parent():
             NAME = parent_name
         
-        if item.checkState(column) == QtCore.Qt.Checked:
+        if value["checked"] is True:
             if name == "electrostatic as cation":
                 self.runJS(f'as_cat_{parent_name}.setVisibility(true)')
                 for unit in self.vis_res_chain_list:
@@ -97,7 +103,19 @@ class MoleculeView(QWebEngineView):
                         case [_, _, Parent.NAME, "electrostatic_anion"]:
                             res_chain, parent, name, int_type = unit
                             self.runJS(f"stage.getRepresentationsByName('{res_chain+parent+name+int_type}').setVisibility(true)")
-        elif item.checkState(column) == QtCore.Qt.Unchecked:
+            elif name == "all":
+                self.runJS(f'as_cat_{parent_name}.setVisibility(true)')
+                self.runJS(f'as_an_{parent_name}.setVisibility(true)')
+                for unit in self.vis_res_chain_list:
+                    match unit:
+                        case [_, _, Parent.NAME, "electrostatic_cation"]:
+                            res_chain, parent, name, int_type = unit
+                            self.runJS(f"stage.getRepresentationsByName('{res_chain+parent+name+int_type}').setVisibility(true)")
+                        case [_, _, Parent.NAME, "electrostatic_anion"]:
+                            res_chain, parent, name, int_type = unit
+                            self.runJS(f"stage.getRepresentationsByName('{res_chain+parent+name+int_type}').setVisibility(true)")
+
+        else:
             if name == "electrostatic as cation":
                 self.runJS(f'as_cat_{parent_name}.setVisibility(false)')
                 for unit in self.vis_res_chain_list:
@@ -112,48 +130,53 @@ class MoleculeView(QWebEngineView):
                         case [_, _, Parent.NAME, "electrostatic_anion"]:
                             res_chain, parent, name, int_type = unit
                             self.runJS(f"stage.getRepresentationsByName('{res_chain+parent+name+int_type}').setVisibility(false)")
-    
-    @QtCore.Slot()
-    def handle_selection_changed(self, item: QtWidgets.QTreeWidgetItem, column):
-        name = item.text(0)
-        if item.checkState(column) == QtCore.Qt.Checked:
+            elif name == "all":
+                self.runJS(f'as_cat_{parent_name}.setVisibility(false)')
+                self.runJS(f'as_an_{parent_name}.setVisibility(false)')
+                for unit in self.vis_res_chain_list:
+                    match unit:
+                        case [_, _, Parent.NAME, "electrostatic_cation"]:
+                            res_chain, parent, name, int_type = unit
+                            self.runJS(f"stage.getRepresentationsByName('{res_chain+parent+name+int_type}').setVisibility(false)")
+                        case [_, _, Parent.NAME, "electrostatic_anion"]:
+                            res_chain, parent, name, int_type = unit
+                            self.runJS(f"stage.getRepresentationsByName('{res_chain+parent+name+int_type}').setVisibility(false)")
+
+    def handle_selection_popper(self, value):
+        index = int(value["index"])
+        name = self.selection_data[index]["name"] 
+        if value["checked"]:
             self.runJS(f"{name}_cartoon.setVisibility(true); {name}_licorice.setVisibility(true)")
-        elif item.checkState(column) == QtCore.Qt.Unchecked:
+        else:
             self.runJS(f"{name}_cartoon.setVisibility(false); {name}_licorice.setVisibility(false)")
 
     def load_visibility_from_tree_pair(self):
-        root = self.tree_pair.invisibleRootItem()
-        parent_count = root.childCount()
-        for i in range(parent_count):
-            parent = root.child(i)
-            item_count = parent.childCount()
-            for j in range(item_count):
-                item = parent.child(j)
-                self.handle_pair_changed(item, 0)
+        for tree_pair in self.tree_pair_data:
+            parent = tree_pair["name"]
+            for index, name in enumerate(tree_pair["interactions"]):
+                checked = tree_pair["state"][index]
+                value = dict(name=name, parent=parent, checked=checked)
+                self.handle_tree_pair(value)
 
     def populate_tree_pair(self):
-        self.tree_pair.clear()
+        self.runJS("window.treePair.length = 0")
         for int_subject in self.int_subjects:
             name = int_subject["name"]
-            pair_item = QtWidgets.QTreeWidgetItem(self.tree_pair, [name])
-            pair_item.setFlags(pair_item.flags() | QtCore.Qt.ItemFlag.ItemIsAutoTristate | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
-            interaction1 = QtWidgets.QTreeWidgetItem(pair_item, ["electrostatic as cation"])
-            interaction2 = QtWidgets.QTreeWidgetItem(pair_item, ["electrostatic as anion"])
-            interaction1.setCheckState(0, QtCore.Qt.Checked)
-            interaction1.setFlags(interaction1.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
-            interaction2.setCheckState(0, QtCore.Qt.Checked)
-            interaction2.setFlags(interaction2.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+            pair_data = dict(name=name,
+                             interactions=['electrostatic as cation', 'electrostatic as anion'],
+                             state=[True, True])
+            self.tree_pair_data.append(pair_data)
         
-        self.tree_pair.itemChanged.connect(self.handle_pair_changed)
+            self.runJS(f"window.treePair.push({json.dumps(pair_data)})")
+
     
     def populate_tree_selection(self):
-        self.tree_selection.clear()
+        self.runJS("window.treeSelection.length = 0")
         for name in self.molselection:
-            selection_item = QtWidgets.QTreeWidgetItem(self.tree_selection, [name])
-            selection_item.setCheckState(0, QtCore.Qt.Checked)
-            selection_item.setFlags(selection_item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
-        
-        self.tree_selection.itemChanged.connect(self.handle_selection_changed)
+            selection_data = dict(name=name, state=True)
+            self.selection_data.append(selection_data)
+            self.runJS(f"window.treeSelection.push({json.dumps(selection_data)})")
+
     
     def build_basic_representation(self):
         for name, selection in self.molselection.items():
@@ -231,7 +254,7 @@ class MoleculeView(QWebEngineView):
                                     sele: ":{chain} and sidechainAttached and {res}"
                                     }});}})""")
 
-    def load_deemian(self, deemian_data, dirname, tree_pair:QtWidgets.QTreeWidget, tree_selection:QtWidgets.QTreeWidget):
+    def load_deemian(self, deemian_data, dirname):
         self.runJS("stage.removeAllComponents();")
         self.vis_res_chain_list = []
 
@@ -257,14 +280,15 @@ class MoleculeView(QWebEngineView):
                             var load_{molname} = stage.loadFile(pdbblob,  {{ ext: "pdb", asTrajectory: true}});
                             ''')
         
-        self.tree_pair = tree_pair
-        self.tree_selection = tree_selection
+        self.tree_pair_data = []
+        self.selection_data = []
         self.build_basic_representation()
         self.draw_interaction_shape()
         self.draw_interacting_residues()
         self.setup_stage()
         self.populate_tree_pair()
         self.populate_tree_selection()
+        self.runJS("if (document.getElementById('treeforceUpdate')) {document.getElementById('treeforceUpdate').click()}")
 
     def set_frame(self, num):
         conf = num - 1

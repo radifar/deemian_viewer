@@ -1,40 +1,22 @@
-from PySide6 import QtCore
+class PandasReactTableModel():
+    def __init__(self):
+        self.data_all = []
+        self.current_data = []
+    
+    def __len__(self):
+        return len(self.current_data)
+    
+    def register_table(self, name, data, conf=1):
+        current_data = [list(row) for row in data[data["conformation"] == conf].itertuples()]
 
-
-class PandasTableModel(QtCore.QAbstractTableModel):
-
-    def __init__(self, data, conf=1):
-        super(PandasTableModel, self).__init__()
-        self._data_all = data
-        self._data = self._data_all[self._data_all["conformation"] == conf]
+        self.data_all.append({"name": name, "data": data})
+        self.current_data.append({"name": name, "current_data": current_data})
     
     def set_frame(self, conf):
-        self.beginResetModel()
-        self._data = self._data_all[self._data_all["conformation"] == conf]
-        self.endResetModel()
-
-    def data(self, index, role):
-        if role == QtCore.Qt.DisplayRole:
-            row = index.row()
-            column = index.column()
-            value = self._data.iloc[row, column]
-            if column == 4:
-                return f'{value:.3f}'
-            return str(value)
-        elif role == QtCore.Qt.ItemDataRole.TextAlignmentRole:
-            return QtCore.Qt.AlignmentFlag.AlignCenter
-
-    def rowCount(self, index):
-        return self._data.shape[0]
-
-    def columnCount(self, index):
-        return self._data.shape[1]
-
-    def headerData(self, section, orientation, role):
-        # section is the index of the column/row.
-        if role == QtCore.Qt.DisplayRole:
-            if orientation == QtCore.Qt.Horizontal:
-                return str(self._data.columns[section])
-
-            if orientation == QtCore.Qt.Vertical:
-                return str(self._data.index[section])
+        for i, data in enumerate(self.data_all):
+            data = data["data"]
+            current_data = [list(row) for row in data[data["conformation"] == conf].itertuples()]
+            self.current_data[i]["current_data"] = current_data
+    
+    def get_data(self, index):
+        return self.current_data[index]

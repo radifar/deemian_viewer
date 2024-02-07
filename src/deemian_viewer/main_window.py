@@ -1,15 +1,121 @@
 import json
-import os
+import os, sys
 from pathlib import Path
 import tarfile
 
 import pandas as pd
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtNetwork, QtWidgets, QtWebChannel, QtWebSockets
 
 from deemian_viewer.data_processing import setup_dataframe
-from deemian_viewer.dialog import RunCommandDialog
 from deemian_viewer.molecule_view import MoleculeView
-from deemian_viewer.pandas_table import PandasTableModel
+from deemian_viewer.pandas_table import PandasReactTableModel
+
+
+class WebSocketTransport(QtWebChannel.QWebChannelAbstractTransport):
+    """QWebChannelAbstractSocket implementation using a QWebSocket internally
+        The transport delegates all messages received over the QWebSocket over
+        its textMessageReceived signal. Analogously, all calls to
+        sendTextMessage will be sent over the QWebSocket to the remote client.
+    """
+
+    def __init__(self, socket):
+        """Construct the transport object and wrap the given socket.
+           The socket is also set as the parent of the transport object."""
+        super().__init__(socket)
+        self._socket = socket
+        self._socket.textMessageReceived.connect(self.text_message_received)
+        self._socket.disconnected.connect(self._disconnected)
+
+    def __del__(self):
+        """Destroys the WebSocketTransport."""
+        self._socket.deleteLater()
+
+    def _disconnected(self):
+        self.deleteLater()
+
+    def sendMessage(self, message):
+        """Serialize the JSON message and send it as a text message via the
+           WebSocket to the client."""
+        doc = QtCore.QJsonDocument(message)
+        json_message = str(doc.toJson(QtCore.QJsonDocument.Compact), "utf-8")
+        # Remove RuntimeError below when exiting caused by race condition when collecting garbage
+        # RuntimeError: Internal C++ object (PySide6.QtWebSockets.QWebSocket) already deleted.
+        try:
+            self._socket.sendTextMessage(json_message)
+        except RuntimeError:
+            pass
+
+    @QtCore.Slot(str)
+    def text_message_received(self, message_data_in):
+        """Deserialize the stringified JSON messageData and emit
+           messageReceived."""
+        message_data = QtCore.QByteArray(bytes(message_data_in, encoding='utf8'))
+        message = QtCore.QJsonDocument.fromJson(message_data)
+        if message.isNull():
+            print("Failed to parse text message as JSON object:", message_data)
+            return
+        if not message.isObject():
+            print("Received JSON message that is not an object: ", message_data)
+            return
+        self.messageReceived.emit(message.object(), self)
+
+
+class WebSocketClientWrapper(QtCore.QObject):
+    """Wraps connected QWebSockets clients in WebSocketTransport objects.
+       This code is all that is required to connect incoming WebSockets to
+       the WebChannel. Any kind of remote JavaScript client that supports
+       WebSockets can thus receive messages and access the published objects.
+    """
+    client_connected = QtCore.Signal(WebSocketTransport)
+
+    def __init__(self, server, parent=None):
+        """Construct the client wrapper with the given parent. All clients
+           connecting to the QWebSocketServer will be automatically wrapped
+           in WebSocketTransport objects."""
+        super().__init__(parent)
+        self._server = server
+        self._server.newConnection.connect(self.handle_new_connection)
+        self._transports = []
+
+    @QtCore.Slot()
+    def handle_new_connection(self):
+        """Wrap an incoming WebSocket connection in a WebSocketTransport
+           object."""
+        socket = self._server.nextPendingConnection()
+        transport = WebSocketTransport(socket)
+        self._transports.append(transport)
+        self.client_connected.emit(transport)
+
+
+class Backend(QtCore.QObject):
+    """An instance of this class gets published over the WebChannel."""
+
+    def __init__(self, backend_dictionary, viewer):
+        """Initialize the QObject."""
+        super().__init__()
+        self.open_deemian = backend_dictionary["openfile"]
+        self.set_conformation = backend_dictionary["set_conformation"]
+        self.handle_tree_pair = viewer.handle_tree_pair
+        self.handle_selection_popper = viewer.handle_selection_popper
+    
+    @QtCore.Slot()
+    def openFile(self):
+        self.open_deemian()
+    
+    @QtCore.Slot(str)
+    def setConformation(self, o):
+        conformation = json.loads(o)
+        self.set_conformation(conformation["position"])
+    
+    @QtCore.Slot(str)
+    def handleTreePair(self, o):
+        checked = json.loads(o)
+        self.handle_tree_pair(checked)
+    
+    @QtCore.Slot(str)
+    def handleSelection(self, o):
+        checked = json.loads(o)
+        self.handle_selection_popper(checked)
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, app):
@@ -17,86 +123,42 @@ class MainWindow(QtWidgets.QMainWindow):
         self.app = app
         self.deemian_data = {}
         self.deemian_loaded = False
-        self.models = {}
-        self.tables = {}
+        self.reactmodels = {}
         self.isPlaying = False
         self.dirname = os.path.dirname(os.path.realpath(__file__))
 
-        menu_bar = self.menuBar()
-        file_menu = menu_bar.addMenu("File")
-        view_menu = menu_bar.addMenu("View")
-        tool_menu = menu_bar.addMenu("Tool")
-        open_action = file_menu.addAction("Open Deemian file")
-        quit_action = file_menu.addAction("Quit")
-        max_mol_action = view_menu.addAction("Maximize Molecule View")
-        command_action = tool_menu.addAction("Run JS Command")
-        open_action.triggered.connect(self.open_file)
-        quit_action.triggered.connect(self.quit_app)
-        max_mol_action.triggered.connect(self.max_mol_view)
-        command_action.triggered.connect(self.run_command)
-
         self.widget = QtWidgets.QWidget()
-
         self.viewer = MoleculeView()
-        self.page = self.viewer.page()
 
-        self.tree_pair = QtWidgets.QTreeWidget(self.widget)
-        self.tree_pair.setHeaderLabel("Interacting Subjects")
+        # https://gist.github.com/vidjuheffex/a9f352334b80c4a1a2f0e14da23fce04
+        # https://www.call-with.cc/post/remote-frontends-for-pyside2-based-vfx-tooling-over
 
-        self.tree_selection = QtWidgets.QTreeWidget(self.widget)
-        self.tree_selection.setHeaderLabel("Visualize Selections")
+        self.server = QtWebSockets.QWebSocketServer("QWebChannel PySide Example",
+                              QtWebSockets.QWebSocketServer.NonSecureMode, )
 
-        self.tabTable = QtWidgets.QTabWidget()
-        self.tabTable.setMinimumHeight(400)
+        if not self.server.listen(QtNetwork.QHostAddress.LocalHost, 12345):
+            print("Failed to open web socket server at port 12345.")
+            sys.exit(-1)
 
-        self.slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.slider.setMaximum(1)
-        self.slider.valueChanged.connect(self.move_slider)
+        # wrap WebSocket clients in QWebChannelAbstractTransport objects
+        self.client_wrapper = WebSocketClientWrapper(self.server)
 
-        self.playButton = QtWidgets.QPushButton()
-        self.playButton.setIcon(QtGui.QIcon(self.dirname + '/icons/play.png'))
-        self.playButton.clicked.connect(self.play_trajectory)
-        self.pauseButton = QtWidgets.QPushButton()
-        self.pauseButton.setIcon(QtGui.QIcon(self.dirname + '/icons/pause.png'))
-        self.pauseButton.hide()
-        self.pauseButton.clicked.connect(self.pause_trajectory)
-        self.prevButton = QtWidgets.QPushButton()
-        self.prevButton.setIcon(QtGui.QIcon(self.dirname + '/icons/back.png'))
-        self.prevButton.clicked.connect(self.decrement_frame)
-        self.nextButton = QtWidgets.QPushButton()
-        self.nextButton.setIcon(QtGui.QIcon(self.dirname + '/icons/next.png'))
-        self.nextButton.clicked.connect(self.increment_frame)
+        # setup the channel
+        self.channel = QtWebChannel.QWebChannel()
+        self.client_wrapper.client_connected.connect(self.channel.connectTo)
 
-        self.frameSelect = QtWidgets.QLineEdit()
-        self.frameSelect.setFixedSize(QtCore.QSize(60, 25))
-        self.frameSelect.setAlignment(QtCore.Qt.AlignCenter)
-        self.frameSelect.setText('1')
-        self.frameSelect.returnPressed.connect(self.select_frame)
-        
-        player_layout = QtWidgets.QHBoxLayout()
-        player_layout.addWidget(self.playButton)
-        player_layout.addWidget(self.pauseButton)
-        player_layout.addWidget(self.slider)
-        player_layout.addWidget(self.prevButton)
-        player_layout.addWidget(self.frameSelect)
-        player_layout.addWidget(self.nextButton)
+        self.backend_dictionary = dict(
+            openfile=self.open_file,
+            set_conformation=self.move_slider
+        )
+
+        self.backend = Backend(self.backend_dictionary, self.viewer)
+        self.channel.registerObject("backend", self.backend)
 
         main_layout = QtWidgets.QGridLayout(self.widget)
-
-        main_layout.addWidget(self.viewer, 0, 0, 2, 1)
-        main_layout.addWidget(self.tree_pair, 0, 1)
-        main_layout.addWidget(self.tree_selection, 0, 2)
-        main_layout.addWidget(self.tabTable, 1, 1, 1, 2)
-        main_layout.addLayout(player_layout, 2, 0)
-
+        main_layout.addWidget(self.viewer, 0, 0)
         self.setLayout(main_layout)
         self.setCentralWidget(self.widget)
-    
-    @QtCore.Slot()
-    def run_command(self):
-        dialog = RunCommandDialog(self.viewer, self.widget)
-        dialog.setWindowTitle("Run JavaScript Command")
-        dialog.exec()
     
     @QtCore.Slot()
     def open_file(self):
@@ -118,108 +180,47 @@ class MainWindow(QtWidgets.QMainWindow):
             self.setup_table(metadata)
             self.setup_frameSelect(metadata)
             dirname = Path(os.path.dirname(filename))
-            self.viewer.load_deemian(self.deemian_data, dirname, self.tree_pair, self.tree_selection)
+            self.viewer.load_deemian(self.deemian_data, dirname)
             self.deemian_loaded = True
             
     def setup_table(self, metadata):
-        self.tabTable.clear()
+        self.viewer.runJS(f"window.tableData.length = 0")
+        self.reactmodels = PandasReactTableModel()
         for interacting_subject in metadata["measurement"]["interacting_subjects"]:
             name = interacting_subject["name"]
             data_name = interacting_subject["results"]
             data = setup_dataframe(self.deemian_data[data_name])
 
-            self.models[name] = PandasTableModel(data)
-            self.tables[name] = QtWidgets.QTableView()
+            self.reactmodels.register_table(name, data)
 
-            self.tables[name].setModel(self.models[name])
-            self.tables[name].setAlternatingRowColors(True)
-            self.tables[name].hideColumn(6)
-            self.tables[name].setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-            self.tables[name].setStyleSheet(
-                            "QTableView {"
-                            "font-size: 14px;"
-                            "}"
-                            "QHeaderView::section{background-color: #ffffff; "
-                            "font-weight: bold; "
-                            "padding-top: 1px;"
-                            "padding-bottom: 1px;"
-                            "color: #3467ba; "
-                            "border:0px; "
-                            "border-left: 1px solid #ababab; "
-                            "border-right: 1px solid #ababab;"
-                            "border-bottom: 1px solid gray;}"
-                        )
-            header = self.tables[name].horizontalHeader()
-            header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
-            header.setMinimumSectionSize(45)
-            header.setStretchLastSection(True)
-
-            self.tabTable.addTab(self.tables[name], name)
+        for i in range(len(self.reactmodels)):
+            self.viewer.runJS(f"window.tableData.push({self.reactmodels.get_data(i)})")
+        
+        self.viewer.runJS("if (document.getElementById('tabforceUpdate')) {document.getElementById('tabforceUpdate').click()}")
 
     def setup_frameSelect(self, metadata):
         min_value, max_value = metadata["measurement"]["conformation_range"]
 
-        onlyInt = QtGui.QIntValidator()
-        onlyInt.setRange(min_value, max_value)
-        self.frameSelect.setValidator(onlyInt)
-        self.frameSelect.setText(str(min_value))
+        if (max_value - min_value) > 0:
+            self.viewer.runJS("window.playerMinMax.length = 0")
+            self.viewer.runJS(f"window.playerMinMax.push({min_value});window.playerMinMax.push({max_value})")
+            self.viewer.runJS("document.getElementById('enablePlayer').click()")
+        else:
+            self.viewer.runJS("document.getElementById('disablePlayer').click()")
 
-        self.slider.setRange(min_value, max_value)
-    
-    @QtCore.Slot(int)
-    def select_frame(self):
-        frame = int(self.frameSelect.text())
-        self.slider.setValue(frame)
     
     @QtCore.Slot(int)
     def move_slider(self, num):
-        self.frameSelect.setText(str(num))
+        self.viewer.runJS(f"window.tableData.length = 0")
+        self.reactmodels.set_frame(num)
+
+        for i in range(len(self.reactmodels)):
+            self.viewer.runJS(f"window.tableData.push({self.reactmodels.get_data(i)})")
+
+        self.viewer.runJS("if (document.getElementById('tabforceUpdate')) {document.getElementById('tabforceUpdate').click()}")
+
         if self.deemian_loaded:
             self.viewer.set_frame(num)
-            for model in self.models.values():
-                model.set_frame(num)
-
-    @QtCore.Slot()
-    def increment_frame(self):
-        self.slider.setValue(self.slider.value() + 1)
-    
-    @QtCore.Slot()
-    def decrement_frame(self):
-        self.slider.setValue(self.slider.value() - 1)
-    
-    def playing_trajectory(self):
-        if self.isPlaying:
-            value = self.slider.value()
-            if value == self.slider.maximum():
-                value = self.slider.minimum() - 1
-            self.slider.setValue(value + 1)
-            QtCore.QTimer.singleShot(900, self.playing_trajectory)
-
-    @QtCore.Slot()
-    def play_trajectory(self):
-        self.playButton.hide()
-        self.pauseButton.show()
-
-        self.isPlaying = True
-        self.playing_trajectory()
-            
-    @QtCore.Slot()
-    def pause_trajectory(self):
-        self.isPlaying = False
-
-        self.playButton.show()
-        self.pauseButton.hide()
-
-    @QtCore.Slot()
-    def max_mol_view(self):
-        if self.tree_pair.isHidden():
-            self.tree_pair.show()
-            self.tree_selection.show()
-            self.tabTable.show()
-        else:
-            self.tree_pair.hide()
-            self.tree_selection.hide()
-            self.tabTable.hide()
 
     @QtCore.Slot()
     def quit_app(self):
