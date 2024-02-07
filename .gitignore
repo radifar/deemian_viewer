@@ -143,4 +143,3 @@ dmypy.json
 
 # npm
 node_modules/
-bundle.js
