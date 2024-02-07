@@ -18,8 +18,8 @@ import React from 'react';
 const Widget = styled('div')(({ theme }) => ({
   padding: 5,
   borderRadius: 5,
-  width: 600,
-  height: 320,
+  width: 625,
+  height: 340,
   maxWidth: '100%',
   margin: 'auto',
   // position: 'relative',
@@ -32,12 +32,13 @@ const Widget = styled('div')(({ theme }) => ({
 const StyledTableCell = styled(TableCell)(({ theme }) => ({
   [`&.${tableCellClasses.head}`]: {
     backgroundColor: 'rgba(33, 33, 33, 1)',
+    fontSize: 14.5,
     textAlign: 'center',
     color: theme.palette.common.white,
   },
   [`&.${tableCellClasses.body}`]: {
     backgroundColor: 'rgba(40, 40, 40, 0.6)',
-    fontSize: 13.5,
+    fontSize: 14.5,
     padding: 2,
     mx: 0,
     textAlign: 'center',
@@ -49,6 +50,7 @@ const StyledTab = styled(Tab)(({ theme }) => ({
   px: 0.5,
   py: -1,
   minHeight: 16,
+  fontSize: 15,
   textTransform :"none", 
   color: 'rgba(255, 255, 255, 0.8)',
   '&.Mui-selected': { color: 'rgba(255, 255, 255, 1)',
@@ -85,7 +87,7 @@ export default function TabTable({ tableData }) {
         {tableData.map((table, index) => (
         <TabPanel key={table.name} value={"" + index} sx={{ padding:0 }}>
           <TableContainer sx={{
-              height: 275,
+              height: 294,
               "&::-webkit-scrollbar": {
                 width: 8
               },
@@ -100,7 +102,7 @@ export default function TabTable({ tableData }) {
             <Table stickyHeader sx={{ minWidth: 450 }} size="small" aria-label="a dense table">
               <TableHead>
                 <TableRow>
-                  <StyledTableCell width="15"></StyledTableCell>
+                  <StyledTableCell width="14"></StyledTableCell>
                   <StyledTableCell>id 1</StyledTableCell>
                   <StyledTableCell>atom 1 info</StyledTableCell>
                   <StyledTableCell>id 2</StyledTableCell>
