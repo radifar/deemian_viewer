@@ -1,0 +1,12 @@
+pyinstaller src/deemian_viewer/deemian_viewer.py \
+--name "deemian-viewer" \
+--add-data "src/deemian_viewer/index.html:deemian_viewer" \
+--add-data "examples/*.pdb:examples" \
+--add-data "examples/*.dd:examples" \
+--add-data "src/deemian_viewer/fonts/*.css:deemian_viewer/fonts" \
+--add-data "src/deemian_viewer/fonts/*.woff2:deemian_viewer/fonts" \
+--add-data "src/deemian_viewer/js/*.js:deemian_viewer/js" \
+--add-data "src/deemian_viewer/js/ngl.js.map:deemian_viewer/js" \
+--exclude-module PySide6.QtQml \
+--hidden-import fastparquet \
+--clean
