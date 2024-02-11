@@ -1,5 +1,9 @@
 # Deemian Viewer
 
+<p align="center">
+  <img src="docs/_static/Deemianviewer_logo_web.png" />
+</p>
+
 Deemian Viewer is a Graphical User Interface (GUI) for visualizing the interaction analysis result from [Deemian](https://deemian-dsl.readthedocs.io/en/latest/index.html).
 
 ## How to get Deemian Viewer
