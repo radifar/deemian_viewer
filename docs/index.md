@@ -76,7 +76,7 @@ Then we can also adjust the visibility range, display the interaction table, tog
 
 :::{card}
 ```{eval-rst}
-.. video:: _static/gettingstartedDeemianViewer.webm
+.. video:: _static/gettingstartedDeemianViewer.mp4
     :width: 760
 ```
 
@@ -89,7 +89,7 @@ While when opening a [multiconformer interaction analysis of VPS4 and CHMP6](htt
 
 :::{card}
 ```{eval-rst}
-.. video:: _static/DeemianViewerMultiTab.webm
+.. video:: _static/DeemianViewerMultiTab.mp4
     :width: 760
 ```
 
@@ -98,7 +98,7 @@ Multiple table with tabs.
 
 :::{card}
 ```{eval-rst}
-.. video:: _static/vps4-chmp6.webm
+.. video:: _static/vps4-chmp6.mp4
     :width: 760
 ```
 
