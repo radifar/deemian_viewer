@@ -15,7 +15,8 @@ author = "Muhammad Radifar"
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ["myst_parser"]
+extensions = ["myst_parser", "sphinxcontrib.video", "sphinx_design"]
+myst_enable_extensions = ["colon_fence"]
 # autoapi_dirs = ["../src"]
 
 # List of patterns, relative to source directory, that match files and
@@ -38,6 +39,9 @@ html_theme_options = {
     "sidebar_hide_name": True,
     "light_logo": "Deemianviewer_logo_web.png",
     "dark_logo": "Deemianviewer_logo_web.png",
+    "announcement": "<strong style='color:red;\
+        '>Attention!</strong> Both Deemian and Deemian Viewer are currently under heavy construction.\
+        Please use at your own risk.",
 }
 
 html_static_path = ["_static"]
