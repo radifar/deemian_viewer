@@ -53,7 +53,7 @@ For now, lets try opening the `n1_g39_5nzn_ionizable_corrected.dd` file.
 As shown in the short video below, after opening the file, we can rotate the molecule using drag and drop movement, zoom the molecule using scoll button, and center the oseltamivir by clicking one of the oseltamivir atom.
 Then we can also adjust the visibility range, display the interaction table, toggle the visibility the interactions, and toggle the visibility of the selections.
 
-<video src="docs/_static/gettingstartedDeemianViewer.mp4"></video>
+https://raw.githubusercontent.com/radifar/deemian_viewer/main/docs/_static/gettingstartedDeemianViewer.mp4
 
 Getting Started with Deemian Viewer.
 
@@ -61,11 +61,11 @@ Of course, the interface could be slightly different depending on the interactio
 For example, when using multiple interaction pair like in [SARS-CoV-2 RBD and ACE2 analysis](https://deemian-dsl.readthedocs.io/en/latest/usage/tutorial/analyze_omicron_multiselection.html), we can see that Deemian Viewer will display multiple table with tabs.
 While when opening a [multiconformer interaction analysis of VPS4 and CHMP6](https://deemian-dsl.readthedocs.io/en/latest/usage/tutorial/analyze_multimodel.html), we can see a `Multiconformation Player` at the bottom.
 
-<video src="docs/_static/DeemianViewerMultiTab.mp4"></video>
+https://raw.githubusercontent.com/radifar/deemian_viewer/main/docs/_static/DeemianViewerMultiTab.mp4
 
 Multiple table with tabs.
 
-<video src="docs/_static/_static/vps4-chmp6.mp4"></video>
+https://raw.githubusercontent.com/radifar/deemian_viewer/main/docs/_static/vps4-chmp6.mp4
 
 Multiconformer analysis with `Multiconformation Player`.
 
