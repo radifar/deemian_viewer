@@ -1,5 +1,9 @@
 # Deemian Viewer
 
+[![Documentation Status](https://readthedocs.org/projects/deemian-viewer/badge/?version=latest)](https://deemian-viewer.readthedocs.io/en/latest/)
+[![release](https://img.shields.io/github/v/release/radifar/deemian_viewer.svg)](https://github.com/radifar/deemian_viewer/releases)
+[![os](https://img.shields.io/badge/OS-Linux%2C%20Windows-purple)]()
+
 <p align="center">
   <img src="docs/_static/Deemianviewer_logo_web.png" />
 </p>
